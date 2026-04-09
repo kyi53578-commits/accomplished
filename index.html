@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">⚡</span>
+          <span class="logo-text">Daily Tracker</span>
+        </div>
+        <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
+      </div>
+
+      <!-- Today Stats -->
+      <div class="today-stats" id="todayStats">
+        <div class="stat-date" id="statDate">Loading...</div>
+        <div class="stat-bars">
+          <div class="stat-bar-wrap">
+            <div class="stat-label"><span>Tasks</span><span id="taskCount">0/0</span></div>
+            <div class="progress-bar"><div class="progress-fill" id="taskProgress"></div></div>
+          </div>
+          <div class="stat-bar-wrap">
+            <div class="stat-label"><span>Non-Neg</span><span id="nnCount">0/0</span></div>
+            <div class="progress-bar"><div class="progress-fill nn" id="nnProgress"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Non-Negotiables -->
+      <div class="sidebar-section">
+        <div class="section-header">
+          <span>⭐ Non-Negotiables</span>
+          <button class="btn-icon" id="addNNBtn" title="Add non-negotiable">+</button>
+        </div>
+        <div id="nnList" class="nn-list"></div>
+      </div>
+
+      <!-- Today's Events -->
+      <div class="sidebar-section">
+        <div class="section-header">
+          <span>📅 Today's Events</span>
+          <button class="btn-icon" id="addEventBtn" title="Add event">+</button>
+        </div>
+        <div id="todayEventsList" class="events-mini-list"></div>
+      </div>
+
+      <!-- Nav -->
+      <nav class="sidebar-nav">
+        <button class="nav-btn active" data-view="calendar">📆 Calendar</button>
+        <button class="nav-btn" data-view="tasks">✅ Tasks</button>
+        <button class="nav-btn" data-view="events">🗓️ All Events</button>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- Calendar View -->
+      <div class="view" id="calendarView">
+        <div class="view-header">
+          <div class="calendar-nav">
+            <button class="btn-nav" id="prevMonth">‹</button>
+            <h2 id="calendarTitle">Loading...</h2>
+            <button class="btn-nav" id="nextMonth">›</button>
+          </div>
+          <button class="btn-today" id="goToday">Today</button>
+        </div>
+
+        <div class="calendar-grid">
+          <div class="cal-header">Sun</div>
+          <div class="cal-header">Mon</div>
+          <div class="cal-header">Tue</div>
+          <div class="cal-header">Wed</div>
+          <div class="cal-header">Thu</div>
+          <div class="cal-header">Fri</div>
+          <div class="cal-header">Sat</div>
+        </div>
+        <div class="calendar-body" id="calendarBody"></div>
+
+        <!-- Day Panel -->
+        <div class="day-panel" id="dayPanel">
+          <div class="day-panel-header">
+            <h3 id="dayPanelTitle">Select a day</h3>
+            <button class="btn-close" id="closeDayPanel">×</button>
+          </div>
+          <div class="day-panel-content" id="dayPanelContent"></div>
+        </div>
+      </div>
+
+      <!-- Tasks View -->
+      <div class="view hidden" id="tasksView">
+        <div class="view-header">
+          <h2>Today's Tasks</h2>
+          <div class="header-actions">
+            <input type="date" id="taskDatePicker" class="date-picker" />
+            <button class="btn-primary" id="addTaskBtn">+ Add Task</button>
+          </div>
+        </div>
+        <div id="tasksList" class="tasks-list"></div>
+      </div>
+
+      <!-- Events View -->
+      <div class="view hidden" id="eventsView">
+        <div class="view-header">
+          <h2>All Events</h2>
+          <button class="btn-primary" id="addEventBtnMain">+ Add Event</button>
+        </div>
+        <div id="allEventsList" class="events-list"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── Modals ───────────────────────────────────────────────────────────────── -->
+
+  <!-- Task Modal -->
+  <div class="modal-overlay hidden" id="taskModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="taskModalTitle">Add Task</h3>
+        <button class="btn-close" id="closeTaskModal">×</button>
+      </div>
+      <form id="taskForm">
+        <input type="hidden" id="taskId" />
+        <div class="form-group">
+          <label>Task Title *</label>
+          <input type="text" id="taskTitle" placeholder="What needs to be done?" required />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="taskDesc" placeholder="Optional details..." rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="taskDate" required />
+        </div>
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="taskNonNeg" />
+            <span class="checkbox-custom"></span>
+            Mark as Non-Negotiable ⭐
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="cancelTaskModal">Cancel</button>
+          <button type="submit" class="btn-primary">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Event Modal -->
+  <div class="modal-overlay hidden" id="eventModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="eventModalTitle">Add Event</h3>
+        <button class="btn-close" id="closeEventModal">×</button>
+      </div>
+      <form id="eventForm">
+        <input type="hidden" id="eventId" />
+        <div class="form-group">
+          <label>Event Title *</label>
+          <input type="text" id="eventTitle" placeholder="Event name" required />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="eventDesc" placeholder="Details..." rows="2"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date *</label>
+            <input type="date" id="eventDate" required />
+          </div>
+          <div class="form-group">
+            <label>Time</label>
+            <input type="time" id="eventTime" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Location</label>
+          <input type="text" id="eventLocation" placeholder="Where?" />
+        </div>
+        <div class="form-group">
+          <label>Color</label>
+          <div class="color-picker">
+            <div class="color-opt active" data-color="#6366f1" style="background:#6366f1"></div>
+            <div class="color-opt" data-color="#ec4899" style="background:#ec4899"></div>
+            <div class="color-opt" data-color="#10b981" style="background:#10b981"></div>
+            <div class="color-opt" data-color="#f59e0b" style="background:#f59e0b"></div>
+            <div class="color-opt" data-color="#ef4444" style="background:#ef4444"></div>
+            <div class="color-opt" data-color="#06b6d4" style="background:#06b6d4"></div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="cancelEventModal">Cancel</button>
+          <button type="submit" class="btn-primary">Save Event</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Non-Neg Modal -->
+  <div class="modal-overlay hidden" id="nnModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Add Non-Negotiable</h3>
+        <button class="btn-close" id="closeNNModal">×</button>
+      </div>
+      <form id="nnForm">
+        <div class="form-group">
+          <label>Title *</label>
+          <input type="text" id="nnTitle" placeholder="e.g., Morning workout, Meditation..." required />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="nnDesc" placeholder="Why is this non-negotiable?" rows="2"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="cancelNNModal">Cancel</button>
+          <button type="submit" class="btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
