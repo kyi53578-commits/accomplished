@@ -1,5 +1,5 @@
 [app]
-name = "daily-tracker-app"
+name = "daily-tracker-kyi53578"
 primary_region = "lax"
 
 [build]
@@ -7,18 +7,15 @@ primary_region = "lax"
 [env]
   PORT = "3000"
 
-[http_service]
-  internal_port = 3000
-  force_https = true
-  auto_stop_machines = false
-  auto_start_machines = true
-  min_machines_running = 1
+  [http_service]
+    internal_port = 3000
+      force_https = true
+        auto_stop_machines = false
+          auto_start_machines = true
+            min_machines_running = 1
 
-[[vm]]
-  memory = "256mb"
-  cpu_kind = "shared"
-  cpus = 1
-
-[mounts]
-  source = "tracker_data"
-  destination = "/data"
+            [[vm]]
+              memory = "256mb"
+                cpu_kind = "shared"
+                  cpus = 1
+                  
