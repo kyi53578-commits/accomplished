@@ -1,0 +1,283 @@
+const fs = require('fs');
+const path = require('path');
+
+const DATA_DIR = process.env.FLY_APP_NAME ? '/data' : __dirname;
+const DB_FILE = path.join(DATA_DIR, 'data.json');
+
+// ─── Load / Save ──────────────────────────────────────────────────────────────
+
+function load() {
+  if (!fs.existsSync(DB_FILE)) return defaultData();
+  try {
+    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  } catch {
+    return defaultData();
+  }
+}
+
+function save(data) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+function defaultData() {
+  return { tasks: [], non_negotiables: [], nn_completions: [], calendar_events: [], event_reminders_sent: [], chat_history: [], _seq: { tasks: 0, nn: 0, events: 0, chat: 0 } };
+}
+
+function nextId(data, key) {
+  data._seq[key] = (data._seq[key] || 0) + 1;
+  return data._seq[key];
+}
+
+function now() {
+  return new Date().toISOString();
+}
+
+function today() {
+  return new Date().toLocaleDateString('en-CA');
+}
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+
+const tasksDB = {
+  getAll: (date) => {
+    const d = load();
+    let tasks = d.tasks;
+    if (date) tasks = tasks.filter(t => t.date === date);
+    return tasks.sort((a, b) => (b.is_non_neg - a.is_non_neg) || a.id - b.id);
+  },
+
+  getByDate: (date) => {
+    const d = load();
+    return d.tasks
+      .filter(t => t.date === date)
+      .sort((a, b) => (b.is_non_neg - a.is_non_neg) || (a.completed - b.completed) || a.id - b.id);
+  },
+
+  get: (id) => {
+    return load().tasks.find(t => t.id === id) || null;
+  },
+
+  create: ({ title, description, date, is_non_neg }) => {
+    const d = load();
+    const task = {
+      id: nextId(d, 'tasks'),
+      title,
+      description: description || null,
+      date,
+      completed: false,
+      is_non_neg: !!is_non_neg,
+      created_at: now(),
+      updated_at: now(),
+    };
+    d.tasks.push(task);
+    save(d);
+    return task;
+  },
+
+  update: (id, updates) => {
+    const d = load();
+    const idx = d.tasks.findIndex(t => t.id === id);
+    if (idx === -1) return null;
+    const task = d.tasks[idx];
+    if (updates.title !== undefined) task.title = updates.title;
+    if (updates.description !== undefined) task.description = updates.description;
+    if (updates.date !== undefined) task.date = updates.date;
+    if (updates.completed !== undefined) task.completed = !!updates.completed;
+    if (updates.is_non_neg !== undefined) task.is_non_neg = !!updates.is_non_neg;
+    task.updated_at = now();
+    d.tasks[idx] = task;
+    save(d);
+    return task;
+  },
+
+  delete: (id) => {
+    const d = load();
+    d.tasks = d.tasks.filter(t => t.id !== id);
+    save(d);
+  },
+
+  toggleComplete: (id) => {
+    const task = tasksDB.get(id);
+    if (!task) return null;
+    return tasksDB.update(id, { completed: !task.completed });
+  },
+
+  getStats: (date) => {
+    const tasks = tasksDB.getByDate(date);
+    return {
+      total: tasks.length,
+      completed: tasks.filter(t => t.completed).length,
+      nonNeg: tasks.filter(t => t.is_non_neg).length,
+      nonNegCompleted: tasks.filter(t => t.is_non_neg && t.completed).length,
+    };
+  },
+};
+
+// ─── Non-Negotiables ──────────────────────────────────────────────────────────
+
+const nnDB = {
+  getAll: () => {
+    return load().non_negotiables.filter(n => n.is_active).sort((a, b) => a.id - b.id);
+  },
+
+  get: (id) => load().non_negotiables.find(n => n.id === id) || null,
+
+  create: ({ title, description }) => {
+    const d = load();
+    const nn = {
+      id: nextId(d, 'nn'),
+      title,
+      description: description || null,
+      is_active: true,
+      created_at: now(),
+    };
+    d.non_negotiables.push(nn);
+    save(d);
+    return nn;
+  },
+
+  update: (id, updates) => {
+    const d = load();
+    const idx = d.non_negotiables.findIndex(n => n.id === id);
+    if (idx === -1) return null;
+    if (updates.title !== undefined) d.non_negotiables[idx].title = updates.title;
+    if (updates.description !== undefined) d.non_negotiables[idx].description = updates.description;
+    if (updates.is_active !== undefined) d.non_negotiables[idx].is_active = !!updates.is_active;
+    save(d);
+    return d.non_negotiables[idx];
+  },
+
+  delete: (id) => {
+    const d = load();
+    d.non_negotiables = d.non_negotiables.filter(n => n.id !== id);
+    d.nn_completions = d.nn_completions.filter(c => c.nn_id !== id);
+    save(d);
+  },
+
+  getCompletion: (nnId, date) => {
+    return load().nn_completions.find(c => c.nn_id === nnId && c.date === date) || null;
+  },
+
+  setCompletion: (nnId, date, completed) => {
+    const d = load();
+    const idx = d.nn_completions.findIndex(c => c.nn_id === nnId && c.date === date);
+    if (idx === -1) {
+      d.nn_completions.push({ nn_id: nnId, date, completed: !!completed });
+    } else {
+      d.nn_completions[idx].completed = !!completed;
+    }
+    save(d);
+    return nnDB.getCompletion(nnId, date);
+  },
+
+  getCompletionsForDate: (date) => {
+    const d = load();
+    return d.non_negotiables
+      .filter(n => n.is_active)
+      .map(n => {
+        const c = d.nn_completions.find(c => c.nn_id === n.id && c.date === date);
+        return { ...n, done_today: c ? c.completed : false };
+      })
+      .sort((a, b) => a.id - b.id);
+  },
+};
+
+// ─── Calendar Events ──────────────────────────────────────────────────────────
+
+const eventsDB = {
+  getAll: () => {
+    return load().calendar_events.sort((a, b) =>
+      a.event_date.localeCompare(b.event_date) || (a.event_time || '').localeCompare(b.event_time || '')
+    );
+  },
+
+  getByDate: (date) => {
+    return load().calendar_events
+      .filter(e => e.event_date === date)
+      .sort((a, b) => (a.event_time || '').localeCompare(b.event_time || ''));
+  },
+
+  getUpcoming: (days = 7) => {
+    const todayStr = today();
+    const future = new Date(Date.now() + days * 86400000).toLocaleDateString('en-CA');
+    return load().calendar_events
+      .filter(e => e.event_date >= todayStr && e.event_date <= future)
+      .sort((a, b) => a.event_date.localeCompare(b.event_date) || (a.event_time || '').localeCompare(b.event_time || ''));
+  },
+
+  get: (id) => load().calendar_events.find(e => e.id === id) || null,
+
+  create: (data) => {
+    const d = load();
+    const event = {
+      id: nextId(d, 'events'),
+      title: data.title,
+      description: data.description || null,
+      location: data.location || null,
+      event_date: data.event_date,
+      event_time: data.event_time || null,
+      all_day: !!data.all_day,
+      color: data.color || '#6366f1',
+      created_at: now(),
+    };
+    d.calendar_events.push(event);
+    save(d);
+    return event;
+  },
+
+  update: (id, data) => {
+    const d = load();
+    const idx = d.calendar_events.findIndex(e => e.id === id);
+    if (idx === -1) return null;
+    const allowed = ['title', 'description', 'location', 'event_date', 'event_time', 'all_day', 'color'];
+    for (const key of allowed) {
+      if (data[key] !== undefined) d.calendar_events[idx][key] = data[key];
+    }
+    save(d);
+    return d.calendar_events[idx];
+  },
+
+  delete: (id) => {
+    const d = load();
+    d.calendar_events = d.calendar_events.filter(e => e.id !== id);
+    d.event_reminders_sent = d.event_reminders_sent.filter(r => r.event_id !== id);
+    save(d);
+  },
+
+  wasReminderSent: (eventId, key) => {
+    return load().event_reminders_sent.some(r => r.event_id === eventId && r.reminder_key === key);
+  },
+
+  markReminderSent: (eventId, key) => {
+    const d = load();
+    if (!d.event_reminders_sent.some(r => r.event_id === eventId && r.reminder_key === key)) {
+      d.event_reminders_sent.push({ event_id: eventId, reminder_key: key, sent_at: now() });
+      save(d);
+    }
+  },
+};
+
+// ─── Chat History ─────────────────────────────────────────────────────────────
+
+const chatDB = {
+  add: (role, content) => {
+    const d = load();
+    d.chat_history.push({ id: nextId(d, 'chat'), role, content, created_at: now() });
+    // Keep only last 50 messages
+    if (d.chat_history.length > 50) d.chat_history = d.chat_history.slice(-50);
+    save(d);
+  },
+
+  getRecent: (limit = 20) => {
+    const d = load();
+    return d.chat_history.slice(-limit).map(h => ({ role: h.role, content: h.content }));
+  },
+
+  clear: () => {
+    const d = load();
+    d.chat_history = [];
+    save(d);
+  },
+};
+
+module.exports = { tasksDB, nnDB, eventsDB, chatDB };
